@@ -114,6 +114,68 @@ public class CarApi {
     @GetMapping(value = "/cars/{brand}/{color}", produces = MediaType.APPLICATION_JSON_VALUE)
     @Operation(summary = "find cars by path", description = "Find cars by branch, color, on path variable")
     @ApiResponses({
-        @ApiResponse
+        @ApiResponse(responseCode = "200", description = "successful connection to the API."),
+        @ApiResponse(responseCode = "400", description = "Not found, please try again")
     })
+    public ResponseEntity<Object> findCarsByPath(
+        @PathVariable("brand") @Parameter(description = "brand to find") String brand,
+        @PathVariable("color") @Parameter(description = "color to find", example = "white") String color,
+        @RequestParam(name = "page", defaultValue = "0") @Parameter(description = "Page (for pagination)") int page,
+        @RequestParam(name = "size", defaultValue = "10") @Parameter(description = "how many cars in each page") int size){
+            var headers = new HttpHeaders();
+            headers.add(HttpHeaders.SERVER, headerValue:"Spring");
+            headers.add(headerName:"X-Custom", headerValue:"Custome response header");
+
+            if (StringUtils.isNumeric(color)){
+                var errorResponse = new ErrorResponse(message:"invalid color", ZonedDateTime.now());
+
+                return new ResponseEntity(errorResponse, headers, HttpStatus.BAD_REQUEST);
+            }
+
+            var pageable = PageRequest.of(page, size, Sort.by(Direction.DESC, ...properties:"price"));
+            var cars = carRepository.findByBrandAndColor(brand, color, pageable).getContent();
+            return ResponseEntity.ok().headers(headers).body(cars);
+        }//end of "hoy many cars in each page" request param
+        
+        @GetMapping(value = "/cars", produces = MediaType.APPLICATION_JSON_VALUE)
+        public List<Car> findCarsByParam(@RequestParam(name = "brand", required = true) String brand,
+            @RequestParam(name = "color", required = true) String color,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "size", defaultValue = "10") int size
+        ){
+            if (StringUtils.isNumeric(color)){
+                throw new IllegalArgumentException("invalid color: " + color);
+            }
+
+            if (StringUtils.isNumeric(brand)){
+                throw new IllegalApiParamException("invalid brand: "+ color);
+            }
+
+            var pageable = PageRequest.of(page, size, Sort.by(Direction.DESC, ...properties:"price"));
+            return carRepository.findByBrandAndColor(brand, color, pageable). getContent();
+        }// end of findCarsByParam
+
+    @ExceptionHandler(IllegalArgumentException.class)
+    public ResponseEntity<ErrorResponse> handleInvalidColorException(IllegalArgumentException e){
+        var exceptionMessage = "Exception: " + e.getMessage();
+        LOG.warn(format:"{}", exceptionMessage);
+
+        var errorResponse = new ErrorResponse(exceptionMessage, ZonedDateTime.now());
+
+        return new ResponseEntity<>(errorResponse, headers:null, HttpStatus.BAD_REQUEST);
+    }// end of response entity
+
+    @GetMapping(value = "/cars/date", produces = MediaType.APPLICATION_JSON_VALUE)
+    public List<Car> findCarsReleasedAfter(
+        @DateTimeFormat(pattern = "yyyy-MM-dd") @RequestParam(name = "first_release_date") LocalDate firstReleaseDate
+    ){
+        return carRepository.findByFirstReleaseDateAfter(firstReleaseDate);
+    }// list of findCarsReleasedAfter
+
+    @GetMapping(value = "/cars/date_before", produces = MediaType.APPLICATION_JSON_VALUE)
+    public List<Car> findCarsReleasedBefore(
+        @DateTimeFormat(pattern = "yyyy-MM-dd") @RequestParam(name = "first_release_date") LocalDate firstReleaseDate
+    ){
+        return carRepository.customQuery(firstReleaseDate);
+    }// end of findCarsReleasedBefore
 }
